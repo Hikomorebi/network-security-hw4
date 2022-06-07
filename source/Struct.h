@@ -1,5 +1,5 @@
-#ifndef  DATA_STRUCTURE_H
-#define  DATA_STRUCTURE_H
+#ifndef  STRUCT_H
+#define  STRUCT_H
 #include "common.h"
 
 struct TCPConThrParam

@@ -1,5 +1,6 @@
 #include "common.h"
 #include "Struct.h"
+#include "HelpFunc.h"
 
 
 pthread_mutex_t UDPPrintlocker=PTHREAD_MUTEX_INITIALIZER;
@@ -97,7 +98,7 @@ extern unsigned short in_cksum(unsigned short *ptr, int nbytes);
 	ip->ttl = 69; 
 	ip->protocol = IPPROTO_UDP; 
 	ip->check = 0; 
-	ip->saddr = inet_addr("192.168.1.168"); 
+	ip->saddr = inet_addr("192.168.225.1"); 
 	ip->daddr = inet_addr(&HostIP[0]);
 
     //-----------------send udp packet-----------------------------------------

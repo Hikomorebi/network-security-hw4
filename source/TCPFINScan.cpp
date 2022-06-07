@@ -1,6 +1,6 @@
 #include "common.h"
 #include "Struct.h"
-
+#include "HelpFunc.h"
 
 int TCPFinThrdNum;
 

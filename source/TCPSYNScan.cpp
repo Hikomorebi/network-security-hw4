@@ -1,9 +1,9 @@
 #include "common.h"
 #include "Struct.h"
+#include "HelpFunc.h"
 
 int TCPSynThrdNum;
 
-//locker
 pthread_mutex_t TCPSynPrintlocker=PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t TCPSynScanlocker=PTHREAD_MUTEX_INITIALIZER;
 
@@ -19,20 +19,20 @@ void* Thread_TCPSYNHost(void* param)
 	char recvbuf[8192];
 	struct sockaddr_in SYNScanHostAddr;
 
-    //---------------Get IP and Port-----------------------------------
+    //获得目标主机的 IP 地址和扫描端口号，以及本机的 IP 地址和端口
     p=(struct TCPSYNHostThrParam*)param;
     HostIP = p->HostIP;
 	HostPort = p->HostPort;
 	LocalPort = p->LocalPort;
 	LocalHostIP = p->LocalHostIP;
 
- 	//--------------set TCP SYN Scan Host address----------------------
+ 	//设置 TCP SYN 扫描的套接字地址
 	memset(&SYNScanHostAddr,0,sizeof(SYNScanHostAddr));
 	SYNScanHostAddr.sin_family = AF_INET;
 	SYNScanHostAddr.sin_addr.s_addr = inet_addr(&HostIP[0]);
 	SYNScanHostAddr.sin_port = htons(HostPort);  
 
-	//---------------creat socket--------------------------------------
+	//创建套接字
 	SynSock=socket(PF_INET, SOCK_RAW, IPPROTO_TCP); 
 	if ( SynSock<0 ) 
 	{
@@ -41,7 +41,7 @@ void* Thread_TCPSYNHost(void* param)
 		pthread_mutex_unlock(&TCPSynPrintlocker);
 	}
 	   
-	//---------------fill tcp syn packet--------------------------------
+	//填充 TCP 头
     struct pseudohdr *ptcph=(struct pseudohdr*)sendbuf; 
     struct tcphdr *tcph=(struct tcphdr*)(sendbuf+sizeof(struct pseudohdr)); 
 
@@ -64,7 +64,7 @@ void* Thread_TCPSYNHost(void* param)
     tcph->th_urp=0; 
 	tcph->th_sum=in_cksum((unsigned short*)ptcph, 20+12); 
     
-	//---------------send tcp syn packet--------------------------------
+	//发送 TCP SYN 数据包
 	len=sendto(SynSock, tcph, 20, 0, (struct sockaddr *)&SYNScanHostAddr, sizeof(SYNScanHostAddr)); 
 	if( len < 0) 
 	{
@@ -73,7 +73,7 @@ void* Thread_TCPSYNHost(void* param)
 		pthread_mutex_unlock(&TCPSynPrintlocker);		
 	}
 
-	//---------------receive TCP response---------------------------------
+	//接收目标主机的 TCP 响应数据包
 	len=read(SynSock, recvbuf, 8192); 
 	if(len <= 0)
 	{
@@ -87,16 +87,14 @@ void* Thread_TCPSYNHost(void* param)
         int i=iph->ip_hl*4; 
         struct tcphdr *tcph=(struct tcphdr *)&recvbuf[i]; 
 
-		string SrcIP = inet_ntoa(iph->ip_src);       //source IP in TCP response packet
-		string DstIP = inet_ntoa(iph->ip_dst);       //destination IP in TCP response packet
+		string SrcIP = inet_ntoa(iph->ip_src);
+		string DstIP = inet_ntoa(iph->ip_dst);
 		struct in_addr in_LocalhostIP;
 		in_LocalhostIP.s_addr = LocalHostIP;
-		string LocalIP = inet_ntoa(in_LocalhostIP);  //LocalhostIP
+		string LocalIP = inet_ntoa(in_LocalhostIP);
 
-		unsigned SrcPort = ntohs(tcph->th_sport);    //source port in TCP response packet
-		unsigned DstPort = ntohs(tcph->th_dport);    //destination port in TCP response packet
-        
-		//--------------Is  IP and Port in the response packet right?-------------------------------
+		unsigned SrcPort = ntohs(tcph->th_sport);
+		unsigned DstPort = ntohs(tcph->th_dport);
 		if(HostIP == SrcIP && LocalIP == DstIP && SrcPort == HostPort && DstPort == LocalPort)
 		{
 			if (tcph->th_flags == 0x14) 
@@ -115,7 +113,6 @@ void* Thread_TCPSYNHost(void* param)
 
 	}
 
-    //--------------------------exit----------------------------------------------
 	delete p;
 	close(SynSock);
 
@@ -124,7 +121,6 @@ void* Thread_TCPSYNHost(void* param)
 	pthread_mutex_unlock(&TCPSynScanlocker);
 }
 
-//==============================================================================
 void* Thread_TCPSynScan(void* param)
 {
     struct TCPSYNThrParam *p;
@@ -136,7 +132,7 @@ void* Thread_TCPSynScan(void* param)
 	pthread_attr_t attr,lattr;
 	int ret;
 
-	//-----------------------get ip and port-------------------------------
+	//获得目标主机的 IP 地址和扫描的起始端口号，终止端口号，以及本机的 IP 地址
 	p=(struct TCPSYNThrParam*)param;
 	HostIP = p->HostIP;
 	BeginPort = p->BeginPort;
@@ -144,34 +140,30 @@ void* Thread_TCPSynScan(void* param)
 	LocalHostIP = p->LocalHostIP;
 	
 
-	//---------------cricle for scan from BeginPort to EndPort------------
+	//循环遍历扫描端口
 	TCPSynThrdNum = 0;
 	LocalPort = 1024;
 
 	for (TempPort=BeginPort;TempPort<=EndPort;TempPort++) 
 	{
-		//-------------Create sub thread-----------------------------
-        //-------------set thread param------------------------------
+        //设置子线程参数
         struct TCPSYNHostThrParam *pTCPSYNHostParam = new TCPSYNHostThrParam;
         pTCPSYNHostParam->HostIP = HostIP;
 		pTCPSYNHostParam->HostPort = TempPort;
         pTCPSYNHostParam->LocalPort = TempPort + LocalPort;
 		pTCPSYNHostParam->LocalHostIP = LocalHostIP;
 
-		//-------------set thread as detach state-------------------------
+		//将子线程设置为分离状
 		pthread_attr_init(&attr);
         pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
                 
-		//-------------Create TCP SYN thread------------------------------
+		//创建子线程
 		ret=pthread_create(&subThreadID,&attr,Thread_TCPSYNHost,pTCPSYNHostParam);
 		if (ret==-1) 
 		{
 			cout<<"Can't create the TCP SYN Scan Host thread !"<<endl;
 		}
-
-		//-------------destroy attribute-----------------------------------
 		pthread_attr_destroy(&attr);
-		//-------------compute thread number-------------------------------
 		pthread_mutex_lock(&TCPSynScanlocker);
         TCPSynThrdNum++;
 		pthread_mutex_unlock(&TCPSynScanlocker);
@@ -181,7 +173,6 @@ void* Thread_TCPSynScan(void* param)
 			sleep(3);
 		}
 	}
-	//-------------------waiting for exit------------------------------------
 	while (TCPSynThrdNum != 0)
 	{
 		sleep(1);

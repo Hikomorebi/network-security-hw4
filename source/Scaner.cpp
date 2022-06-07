@@ -1,5 +1,11 @@
-#include "Scaner.h"
+#include "common.h"
+#include "Struct.h"
+#include "HelpFunc.h"
 
+extern void* Thread_TCPconnectScan(void*);
+extern void* Thread_UDPScan(void* );
+extern void* Thread_TCPSynScan(void* );
+extern void* Thread_TCPFinScan(void* );
 int main(int argc, char *argv[])
 { // argc=外部命令参数的个数，argv[]存放各参数
     string HostIP;
